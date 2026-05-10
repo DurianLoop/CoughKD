@@ -1,0 +1,9 @@
+[project]
+name = "coughkd"
+version = "0.1.0"
+description = "Reproducible COUGHKD experimental pipeline for cough audio distillation research."
+requires-python = ">=3.11"
+dependencies = []
+
+[tool.coughkd]
+package_layout = "src"

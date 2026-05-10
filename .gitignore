@@ -1,0 +1,34 @@
+# Local environments and caches
+.conda/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Experiment outputs and large generated artifacts
+runs/
+outputs/
+checkpoints/
+pretrained/
+external/
+*.ckpt
+*.pth
+*.pt
+*.onnx
+
+# OS/editor noise
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# LaTeX build outputs
+paper/*.aux
+paper/*.bbl
+paper/*.blg
+paper/*.fdb_latexmk
+paper/*.fls
+paper/*.log
+paper/*.out
+paper/*.synctex.gz

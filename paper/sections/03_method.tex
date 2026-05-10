@@ -1,0 +1,78 @@
+\section{Method}
+\label{sec:method}
+
+\subsection{Problem Definition}
+
+Let $x_i$ denote an audio recording and $y_i \in \{1,\ldots,C\}$ denote the respiratory condition label. The training set is split by subject whenever subject identifiers are available. A long recording is converted into cough candidate segments $\{s_{ij}\}_{j=1}^{n_i}$, and the recording-level prediction is obtained by aggregating segment-level probabilities.
+
+The goal is to learn a compact student $f_s$ that approximates a high-capacity teacher $f_t$ while minimizing deployment cost:
+\begin{equation}
+\max_{f_s} \quad \mathrm{AUROC}_{external}(f_s) - \lambda \log(\mathrm{Latency}(f_s)) - \mu \log(\mathrm{Params}(f_s)).
+\end{equation}
+
+\subsection{Audio Preprocessing}
+
+All audio is converted to mono 16 kHz waveform. We remove obviously invalid recordings using duration, clipping, energy, and cough-confidence filters. For long audio, a cough detector produces candidate segments with 50\% overlap and hysteresis merging. Each segment is converted to a log-mel spectrogram using the same frontend for teacher and student unless the backbone requires a different resolution.
+
+\subsection{Teacher Fine-Tuning}
+
+The default teacher is BEATs-base, with AST-base and PANNs CNN14 as independent teacher baselines. Teacher training optimizes cross-entropy with class-balanced sampling:
+\begin{equation}
+\mathcal{L}_{teacher} = \mathcal{L}_{CE}(y, p_t) + \gamma \mathcal{L}_{calib},
+\end{equation}
+where $\mathcal{L}_{calib}$ is an optional differentiable calibration regularizer. Teacher selection is based on validation AUROC and expected calibration error, not accuracy alone.
+
+\subsection{Student Networks}
+
+We evaluate four deployment families:
+
+\begin{itemize}
+    \item \textbf{MobileNetV3}: mobile spectrogram classifier.
+    \item \textbf{EfficientNet-B0/B2}: compact but stronger spectrogram classifier.
+    \item \textbf{BC-ResNet}: ultra-light audio CNN.
+    \item \textbf{ECAPA-small}: temporal embedding model with attentive pooling.
+\end{itemize}
+
+All students use the same training and evaluation splits. Parameter count, FLOPs, CPU latency, and exported model size are measured with fixed input duration.
+
+\subsection{Multi-Level Distillation}
+
+The student objective is:
+\begin{align}
+\mathcal{L}_{student}
+&= \mathcal{L}_{CE}(y, p_s)
++ \alpha T^2 \mathrm{KL}(\sigma(z_t/T) \| \sigma(z_s/T)) \nonumber \\
+&+ \beta \| h_t - P(h_s) \|_2^2
++ \delta \mathcal{L}_{emb}
++ \eta \mathcal{L}_{rel}.
+\end{align}
+
+Here $z_t,z_s$ are teacher and student logits, $T$ is temperature, $h_t,h_s$ are intermediate features, and $P$ is a learned projection layer used when teacher and student feature dimensions differ. The embedding term aligns normalized teacher and student embeddings:
+\begin{equation}
+\mathcal{L}_{emb} =
+1 -
+\frac{1}{B}
+\sum_{i=1}^{B}
+\cos \left(
+\frac{P_e(e_{s,i})}{\|P_e(e_{s,i})\|_2},
+\frac{e_{t,i}}{\|e_{t,i}\|_2}
+\right),
+\end{equation}
+where $P_e$ denotes the same feature-alignment operator when dimensions differ. The relation term preserves pairwise similarity within each mini-batch:
+\begin{equation}
+\mathcal{L}_{rel} =
+\left\|
+\mathrm{cos}(E_t, E_t) -
+\mathrm{cos}(P_e(E_s), P_e(E_s))
+\right\|_F^2.
+\end{equation}
+
+The current executable PyTorch path exposes $T$, $\alpha$, $\beta$, $\delta$, $\eta$, and label smoothing as training arguments and records every loss component in the run event log. Attention-transfer distillation remains an ablation target for teacher backbones that expose compatible time-frequency attention maps.
+
+\subsection{Record-Level Aggregation}
+
+For recording-level classification, segment probabilities are aggregated using quality-weighted top-$k$ pooling:
+\begin{equation}
+\hat{p}_i = \frac{\sum_{j \in \mathrm{TopK}(q_{ij})} q_{ij} p_{ij}}{\sum_{j \in \mathrm{TopK}(q_{ij})} q_{ij}},
+\end{equation}
+where $q_{ij}$ is the segment quality score. This limits the influence of non-cough or corrupted segments in long recordings.

@@ -1,0 +1,22 @@
+\section{Introduction}
+
+Cough is a frequent symptom of respiratory disease and can be recorded with commodity microphones at negligible marginal cost. Large crowdsourced corpora such as COUGHVID and Coswara have made cough audio a realistic research substrate for COVID-19 and respiratory-condition screening \cite{orlandic2021coughvid,bhattacharya2023coswara}. However, the practical value of a cough classifier depends on more than in-domain accuracy: it must tolerate uncontrolled microphones, background speech, label noise, demographic shift, and low-resource deployment \cite{han2022sounds}.
+
+Recent audio foundation models, including AST, PANNs, PaSST, HTS-AT, AudioMAE, and BEATs, provide strong transferable representations for audio classification \cite{gong2021ast,kong2020panns,koutini2022passt,chen2022htsat,baade2022maeast,chen2023beats}. Their capacity is useful for noisy cough data, but their memory and latency profiles are poorly matched to mobile screening or wearable health scenarios. This motivates a focused question:
+
+\begin{quote}
+\emph{Can a compact cough screening network retain the cross-dataset performance and calibration of an audio foundation-model teacher while achieving an order-of-magnitude reduction in computation?}
+\end{quote}
+
+We propose \textsc{CoughKD}, a compression and distillation framework for cough audio classification. The teacher is a high-capacity audio foundation model fine-tuned with conservative data protocols; the student is a compact model selected from deployment-friendly architectures such as MobileNetV3, EfficientNet-B0, BC-ResNet, and ECAPA-small. Distillation is performed at four complementary levels: softened responses, intermediate representations, attention maps, and sample relations. The design is intentionally empirical and auditable: each component is paired with an ablation and a failure mode.
+
+The intended contributions are:
+
+\begin{itemize}
+    \item A reproducible teacher--student protocol for cough audio screening that separates in-domain performance from cross-dataset generalization.
+    \item A multi-level distillation objective combining response, feature, attention, and relation transfer for compact respiratory audio models.
+    \item A benchmark plan covering more than twenty teacher, student, classical, and distilled baselines under identical subject-disjoint splits.
+    \item A deployment-oriented evaluation suite reporting AUROC/AUPRC/F1 together with calibration error, latency, parameter count, FLOPs, and model size.
+\end{itemize}
+
+The current document is a paper scaffold and research protocol. It uses target values only to define acceptance criteria for the study. No target value should be presented as an experimental result until reproduced under the protocol in Section~\ref{sec:experiments}.

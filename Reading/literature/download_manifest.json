@@ -1,0 +1,90 @@
+[
+  {
+    "file": "2026_DNDT_DNDF_cross_dataset_cough_covid_arxiv.pdf",
+    "url": "https://arxiv.org/pdf/2501.01117",
+    "title": "Robust COVID-19 Detection from Cough Sounds using Deep Neural Decision Tree and Forest",
+    "priority": 1,
+    "status": "downloaded",
+    "bytes": 9429735
+  },
+  {
+    "file": "2025_PSR_3D_DCNN_cough_covid_scirep.pdf",
+    "url": "https://www.nature.com/articles/s41598-025-29633-8.pdf",
+    "title": "Advanced COVID-19 detection using cough signals with space reconstruction and 3D DCNN",
+    "priority": 2,
+    "status": "downloaded",
+    "bytes": 1628188
+  },
+  {
+    "file": "2025_drift_adaptive_dynamic_cough_audio_jmir.pdf",
+    "url": "https://www.jmir.org/2025/1/e66919/PDF",
+    "title": "A Comprehensive Drift-Adaptive Framework for COVID-19 Detection From Dynamic Cough Audio Data",
+    "priority": 3,
+    "status": "downloaded",
+    "bytes": 3454604
+  },
+  {
+    "file": "2025_vggish_cough_classification_bmc.pdf",
+    "url": "https://bmcmedinformdecismak.biomedcentral.com/counter/pdf/10.1186/s12911-025-03065-w.pdf",
+    "title": "Deep learning-based cough classification using application-recorded sounds: VGGish transfer learning",
+    "priority": 4,
+    "status": "downloaded",
+    "bytes": 6394088
+  },
+  {
+    "file": "2025_respiratory_kd_ensemble_arxiv.pdf",
+    "url": "https://arxiv.org/pdf/2505.22027",
+    "title": "Improving Respiratory Sound Classification with Architecture-Agnostic KD from Ensembles",
+    "priority": 5,
+    "status": "downloaded",
+    "bytes": 384583
+  },
+  {
+    "file": "2025_respiratory_audio_foundation_pretraining_arxiv.pdf",
+    "url": "https://arxiv.org/pdf/2505.15307",
+    "title": "Towards Pre-training an Effective Respiratory Audio Foundation Model",
+    "priority": 6,
+    "status": "downloaded",
+    "bytes": 214642
+  },
+  {
+    "file": "2025_audio_foundation_heart_respiratory_arxiv.pdf",
+    "url": "https://arxiv.org/pdf/2504.18004",
+    "title": "Assessing the Utility of Audio Foundation Models for Heart and Respiratory Sound Analysis",
+    "priority": 7,
+    "status": "downloaded",
+    "bytes": 584775
+  },
+  {
+    "file": "2025_chio_cough_covid_scirep.pdf",
+    "url": "https://www.nature.com/articles/s41598-025-85140-w.pdf",
+    "title": "Automatic detection and prediction of COVID-19 in cough audio using CHIO",
+    "priority": 8,
+    "status": "downloaded",
+    "bytes": 5422428
+  },
+  {
+    "file": "2025_interspeech_respiratory_foundation_model.pdf",
+    "url": "https://www.isca-archive.org/interspeech_2025/niizumi25_interspeech.pdf",
+    "title": "Towards Pre-training an Effective Respiratory Audio Foundation Model (Interspeech)",
+    "priority": 9,
+    "status": "downloaded",
+    "bytes": 265189
+  },
+  {
+    "file": "2026_lima_montreal_cough_ai_ann_epi_sciencedirect.pdf",
+    "url": "https://www.sciencedirect.com/science/article/pii/S1047279726000748/pdfft?isDTMRedir=true&download=true",
+    "title": "Cough acoustic analysis using AI for COVID-19 detection: Lima vs Montreal",
+    "priority": 10,
+    "status": "failed",
+    "error": "HTTP Error 403: Forbidden"
+  },
+  {
+    "file": "2026_DNDT_DNDF_cross_dataset_cough_covid_sciencedirect.pdf",
+    "url": "https://www.sciencedirect.com/science/article/pii/S0957417426001491/pdfft?isDTMRedir=true&download=true",
+    "title": "Robust COVID-19 detection from cough sounds using DNDT/DNDF ScienceDirect version",
+    "priority": 11,
+    "status": "failed",
+    "error": "HTTP Error 403: Forbidden"
+  }
+]

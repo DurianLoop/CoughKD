@@ -1,0 +1,6 @@
+name: coughkd
+channels:
+  - defaults
+dependencies:
+  - python=3.14
+  - pip

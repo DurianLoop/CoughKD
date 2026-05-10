@@ -1,0 +1,44 @@
+\documentclass[letterpaper,10pt]{article}
+
+\usepackage{times}
+\usepackage{helvet}
+\usepackage{courier}
+\usepackage[hyphens]{url}
+\usepackage{graphicx}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{booktabs}
+\usepackage{multirow}
+\usepackage{tabularx}
+\usepackage{xcolor}
+\usepackage[margin=0.75in]{geometry}
+
+\urlstyle{rm}
+\def\UrlFont{\rm}
+\frenchspacing
+\setlength{\pdfpagewidth}{8.5in}
+\setlength{\pdfpageheight}{11in}
+
+\title{\textbf{CoughKD: Distilling Audio Foundation Models into Compact Cough Screening Networks}}
+\author{Anonymous Authors\\Anonymous Institution}
+\date{}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+Audio-based respiratory screening has become a promising low-cost pathway for monitoring cough-related diseases, yet the strongest audio foundation models remain too expensive for continuous mobile or edge deployment. We present \textsc{CoughKD}, a teacher--student framework that transfers disease-discriminative and robustness-preserving knowledge from pretrained audio foundation models to compact cough screening networks. A BEATs/AST/PANNs teacher is fine-tuned on cough and respiratory audio with subject-disjoint training splits, while MobileNetV3, EfficientNet, BC-ResNet, and ECAPA-style students are optimized using response-, feature-, attention-, and relation-level distillation. To reduce the common overclaiming risk in cough-based diagnosis, we evaluate models under in-domain, cross-dataset, calibration, subgroup, and efficiency protocols. The proposed study targets a deployable model that preserves at least 95\% of teacher AUROC while reducing parameters by more than 10$\times$ and CPU latency by more than 5$\times$. This manuscript is a research protocol and paper draft: all numerical results marked as targets must be replaced with controlled experimental measurements before submission.
+\end{abstract}
+
+\input{sections/01_introduction}
+\input{sections/02_related_work}
+\input{sections/03_method}
+\input{sections/04_experiments}
+\input{sections/05_results}
+\input{sections/06_discussion}
+\input{sections/07_conclusion}
+
+\bibliography{references}
+\bibliographystyle{plain}
+
+\end{document}

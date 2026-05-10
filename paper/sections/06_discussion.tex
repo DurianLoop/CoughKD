@@ -1,0 +1,13 @@
+\section{Discussion and Review Notes}
+
+\paragraph{Why distillation is the right main story.}
+Patient voiceprint recognition from cough is scientifically interesting but depends heavily on identity labels and data-use permissions. In contrast, teacher-to-student compression can be evaluated on existing cough datasets with standard classification protocols. It creates a cleaner top-conference story: strong teacher, compact deployable student, rigorous generalization and efficiency evidence.
+
+\paragraph{Main threat to validity.}
+The biggest risk is dataset confounding. COVID labels may correlate with microphone type, geography, recording date, language, or symptom-reporting behavior. Distillation can transfer these shortcuts from teacher to student. The paper must therefore emphasize external validation, subgroup reporting, and calibration rather than only leaderboard-style accuracy.
+
+\paragraph{Expected reviewer concerns.}
+Reviewers will likely ask whether the method is more than combining known KD losses. The response must be empirical and domain-specific: cough audio has label noise, segment uncertainty, and long-recording aggregation; the contribution is the validated distillation recipe under realistic respiratory-audio constraints. If full KD does not beat simpler KD, the paper should pivot to a careful negative result or a narrower claim.
+
+\paragraph{Clinical caution.}
+The system should be described as a screening research model, not a diagnostic device. Any medical claim requires prospective clinical validation and regulatory review.

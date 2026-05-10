@@ -1,0 +1,56 @@
+\section{Experimental Protocol}
+\label{sec:experiments}
+
+\subsection{Datasets}
+
+The primary training and in-domain evaluation datasets are Coswara and COUGHVID \cite{bhattacharya2023coswara,orlandic2021coughvid}. Cambridge COVID-19 Sounds, DiCOVA, Virufy, and ICBHI 2017 are used as external or auxiliary evaluation resources depending on access and license constraints \cite{han2022sounds}. No dataset is mixed into the external test set after model selection.
+
+The current engineering baseline uses only the filtered Coswara cough subset. It contains \texttt{cough-heavy} and \texttt{cough-shallow} recordings joined with participant-level metadata, with labels normalized to five COVID/respiratory-status classes. The current measured split and label counts are reported in Section~\ref{sec:results}; all other datasets remain planned resources until their manifests and license-compatible protocols are finalized.
+
+\begin{table}[t]
+\centering
+\small
+\begin{tabularx}{\linewidth}{lXXX}
+\toprule
+Dataset & Role & Labels & Main Risk \\
+\midrule
+Coswara & primary training & COVID status, respiratory sounds & imbalance, geography skew \\
+COUGHVID & pretraining/external & cough quality, COVID/symptoms subset & noisy crowdsourcing \\
+Cambridge & external & COVID status, symptoms & access and bias control \\
+DiCOVA & benchmark & COVID binary task & challenge-specific protocol \\
+Virufy & stress test & PCR-related labels & small sample size \\
+ICBHI & auxiliary & respiratory cycles & not cough-specific \\
+\bottomrule
+\end{tabularx}
+\caption{Dataset roles. Final submission must report exact sample counts after filtering.}
+\label{tab:datasets}
+\end{table}
+
+\subsection{Splits and Leakage Control}
+
+All splits are subject-disjoint when subject identifiers are present. If subject identifiers are missing, the dataset is used only for pretraining or external aggregate evaluation, not for patient-level recognition. Hyperparameters are selected on validation data from the training domain only. External datasets are evaluated once per finalized checkpoint.
+
+\subsection{Long-Training Readiness}
+
+Long-duration GPU experiments are accepted only after a readiness gate is satisfied. The gate requires a locked runtime environment, frozen manifests and subject-disjoint splits, feature-extraction profiling or validated caching, CE-only student controls, explicit compact-versus-foundation teacher labeling, extended metrics beyond accuracy, and an audit trail linking each table row to command line, config, environment, checkpoint, prediction file, and manifest. The compact-teacher baseline has passed this gate for engineering long runs through preflight and CE-only/KD testround artifacts. The first foundation-teacher path, PANNs CNN14 16 kHz, has also passed the gate and completed one 30-epoch Coswara long run. BEATs, AST, HTS-AT, and PaSST remain gated until their dedicated wrappers pass the same smoke and full-run checks.
+
+\subsection{Baselines}
+
+We compare classical baselines, non-distilled students, foundation-model teachers, and distilled students. Classical baselines include MFCC+SVM, MFCC+random forest, and log-mel BiLSTM. Teacher baselines include PANNs CNN14, AST-base, PaSST, HTS-AT, and BEATs-base. Student baselines include MobileNetV3, EfficientNet-B0/B2, BC-ResNet, and ECAPA-small.
+
+\subsection{Metrics}
+
+The primary classification metric is AUROC. We also report AUPRC, macro-F1, sensitivity, specificity, expected calibration error, and threshold-specific operating points. Efficiency is reported using parameters, FLOPs, model size, CPU latency, and optional mobile latency. Cross-dataset robustness is reported as absolute AUROC drop from in-domain test to external test.
+
+\subsection{Ablations}
+
+The ablation suite isolates each design claim:
+
+\begin{itemize}
+    \item Teacher choice: PANNs vs AST vs BEATs.
+    \item Student choice: MobileNetV3 vs EfficientNet vs BC-ResNet vs ECAPA-small.
+    \item Distillation loss: CE only, response KD, feature KD, attention KD, relation KD, full \textsc{CoughKD}.
+    \item Data robustness: no augmentation, waveform augmentation, SpecAugment, combined augmentation.
+    \item Aggregation: mean pooling, max pooling, top-$k$ pooling, quality-weighted top-$k$ pooling.
+    \item Deployment: FP32, FP16, INT8 post-training quantization.
+\end{itemize}

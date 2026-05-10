@@ -1,0 +1,24 @@
+name: coughkd-aaai
+channels:
+  - pytorch
+  - nvidia
+  - conda-forge
+  - defaults
+dependencies:
+  - python=3.11
+  - pip
+  - numpy
+  - scipy
+  - scikit-learn
+  - pandas
+  - matplotlib
+  - seaborn
+  - tqdm
+  - pip:
+      - torch
+      - torchaudio
+      - torchvision
+      - torchlibrosa
+      - transformers
+      - librosa
+      - soundfile

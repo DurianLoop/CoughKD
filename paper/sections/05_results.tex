@@ -1,0 +1,28 @@
+\section{Results and Reporting Plan}
+\label{sec:results}
+
+This section separates measured engineering evidence from target tables. The measured baseline below is backed by saved run artifacts, fixed subject-disjoint splits, validation-based checkpoint selection, and held-out test predictions. The remaining target tables are study-planning material and must not be treated as empirical claims.
+
+\subsection{Measured Engineering Baseline}
+
+The current repository includes one closed-loop Coswara cough experiment using a compact convolutional teacher and a MobileNet-style depthwise student trained with response and feature distillation. The filtered manifest contains 5,247 cough recordings from 2,635 subjects after removing \texttt{under\_validation} labels and recordings shorter than 0.5 seconds. The split is subject-disjoint.
+
+\input{tables/coswara_split_summary}
+\input{tables/coswara_engineering_results}
+
+The student has 20,717 parameters, a 5.32$\times$ reduction relative to the compact 110,277-parameter teacher. On this single five-epoch engineering run, the student slightly exceeds the compact teacher in macro one-vs-rest AUROC (0.580959 vs. 0.577184) while trailing in raw accuracy. This establishes that the code path for manifest loading, training, checkpoint selection, knowledge distillation, test inference, and artifact export is functional. It does not establish clinical utility: the teacher is not yet a pretrained BEATs/AST/PANNs model, repeated-seed confidence intervals are absent, and no external validation has been performed.
+
+\paragraph{Foundation-teacher long run.}
+The first completed foundation-teacher run uses the official PANNs CNN14 16 kHz checkpoint as a frozen AudioSet backbone with a trainable Coswara classification head. It was trained for 30 teacher epochs and 30 student epochs on the same subject-disjoint Coswara split. On the held-out test set, the PANNs teacher reaches 0.613420 macro one-vs-rest AUROC, the CE-only depthwise student reaches 0.563910, and the KD depthwise student reaches 0.566423. This result upgrades the evidence from compact-teacher plumbing to a real pretrained-teacher experiment, but it remains a single-seed in-domain run and does not support clinical claims or cross-dataset generalization claims.
+
+\subsection{Target Tables}
+
+\input{tables/model_comparison}
+\input{tables/ablation_plan}
+\input{tables/efficiency_plan}
+
+\paragraph{Success criteria.}
+The central claim is supported only if a distilled student simultaneously satisfies: (1) at least 95\% teacher AUROC retention in-domain, (2) smaller external AUROC drop than the corresponding CE-only student, (3) at least 10$\times$ parameter reduction compared with the teacher, and (4) at least 5$\times$ CPU latency reduction under identical preprocessing.
+
+\paragraph{Statistical reporting.}
+Each result table should report mean and 95\% confidence interval over five subject-disjoint folds or five random seeds. Model comparisons should include paired bootstrap intervals on AUROC and McNemar or approximate randomization tests for thresholded F1 when appropriate.
