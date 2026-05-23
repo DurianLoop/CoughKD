@@ -4,7 +4,10 @@ from __future__ import annotations
 
 import json
 import math
+import shutil
 import struct
+import subprocess
+import sys
 import wave
 from dataclasses import asdict, dataclass
 from pathlib import Path
@@ -39,11 +42,14 @@ def write_wav(path: Path, samples: list[float], sample_rate: int) -> None:
 
 
 def read_wav_mono(path: Path) -> tuple[list[float], int]:
-    with wave.open(str(path), "rb") as handle:
-        channels = handle.getnchannels()
-        sample_width = handle.getsampwidth()
-        sample_rate = handle.getframerate()
-        raw = handle.readframes(handle.getnframes())
+    try:
+        with wave.open(str(path), "rb") as handle:
+            channels = handle.getnchannels()
+            sample_width = handle.getsampwidth()
+            sample_rate = handle.getframerate()
+            raw = handle.readframes(handle.getnframes())
+    except (wave.Error, EOFError):
+        return _read_with_ffmpeg_mono(path, sample_rate=16000)
     if sample_width != 2:
         raise ValueError(f"unsupported WAV sample width {sample_width}; expected 16-bit PCM")
     ints = struct.unpack("<" + "h" * (len(raw) // 2), raw)
@@ -53,6 +59,41 @@ def read_wav_mono(path: Path) -> tuple[list[float], int]:
     for idx in range(0, len(ints), channels):
         mono.append(sum(ints[idx : idx + channels]) / (32768.0 * channels))
     return mono, sample_rate
+
+
+def _read_with_ffmpeg_mono(path: Path, sample_rate: int = 16000) -> tuple[list[float], int]:
+    ffmpeg = shutil.which("ffmpeg")
+    if ffmpeg is None:
+        env_prefix = Path(sys.executable).resolve().parent if "sys" in globals() else None
+        candidate = env_prefix / "Library" / "bin" / "ffmpeg.exe" if env_prefix is not None else None
+        if candidate is not None and candidate.is_file():
+            ffmpeg = str(candidate)
+    if ffmpeg is None:
+        raise RuntimeError(
+            f"Cannot decode non-WAV audio without ffmpeg on PATH: {path}. "
+            "Install ffmpeg in the CoughKD conda environment first."
+        )
+    cmd = [
+        ffmpeg,
+        "-v",
+        "error",
+        "-i",
+        str(path),
+        "-f",
+        "s16le",
+        "-acodec",
+        "pcm_s16le",
+        "-ac",
+        "1",
+        "-ar",
+        str(sample_rate),
+        "-",
+    ]
+    raw = subprocess.check_output(cmd)
+    if not raw:
+        return [], sample_rate
+    ints = struct.unpack("<" + "h" * (len(raw) // 2), raw)
+    return [value / 32768.0 for value in ints], sample_rate
 
 
 def resample_linear(samples: list[float], src_rate: int, dst_rate: int) -> list[float]:
