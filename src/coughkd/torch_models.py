@@ -80,6 +80,7 @@ class CoughManifestDataset(_DatasetBase):  # type: ignore[misc,valid-type]
         splits: set[str] | None = None,
         max_records: int | None = None,
         max_duration_sec: float | None = 4.0,
+        sample_weights: dict[str, float] | None = None,
     ):
         require_torch()
         self.root = root
@@ -93,6 +94,7 @@ class CoughManifestDataset(_DatasetBase):  # type: ignore[misc,valid-type]
             rows = rows[:max_records]
         self.rows = rows
         self.max_duration_sec = max_duration_sec
+        self.sample_weights = sample_weights or {}
         labels = sorted({row["label"] for row in self.rows})
         self.label_to_index = label_to_index or {label: idx for idx, label in enumerate(labels)}
 
@@ -110,7 +112,8 @@ class CoughManifestDataset(_DatasetBase):  # type: ignore[misc,valid-type]
         waveform = torch.tensor(samples, dtype=torch.float32)
         tensor = torch.tensor(features, dtype=torch.float32).unsqueeze(0)
         label = torch.tensor(self.label_to_index[row["label"]], dtype=torch.long)
-        return {"features": tensor, "waveform": waveform, "label": label, "recording_id": row["recording_id"]}
+        weight = torch.tensor(float(self.sample_weights.get(row["recording_id"], 1.0)), dtype=torch.float32)
+        return {"features": tensor, "waveform": waveform, "label": label, "recording_id": row["recording_id"], "kd_weight": weight}
 
 
 def pad_collate(batch: list[dict[str, Any]]) -> dict[str, Any]:
@@ -121,6 +124,7 @@ def pad_collate(batch: list[dict[str, Any]]) -> dict[str, Any]:
     features = torch.zeros((len(batch), 1, max_frames, n_mels), dtype=torch.float32)
     waveforms = torch.zeros((len(batch), max_samples), dtype=torch.float32)
     labels = torch.stack([item["label"] for item in batch])
+    kd_weights = torch.stack([item["kd_weight"] for item in batch])
     recording_ids = []
     for idx, item in enumerate(batch):
         frames = item["features"].shape[-2]
@@ -128,7 +132,7 @@ def pad_collate(batch: list[dict[str, Any]]) -> dict[str, Any]:
         features[idx, :, :frames, :] = item["features"]
         waveforms[idx, :samples] = item["waveform"]
         recording_ids.append(item["recording_id"])
-    return {"features": features, "waveform": waveforms, "label": labels, "recording_id": recording_ids}
+    return {"features": features, "waveform": waveforms, "label": labels, "kd_weight": kd_weights, "recording_id": recording_ids}
 
 
 class ConvTeacher(_ModuleBase):  # type: ignore[misc,valid-type]
@@ -165,7 +169,7 @@ class PannsCnn14Teacher(_ModuleBase):  # type: ignore[misc,valid-type]
     def __init__(
         self,
         num_classes: int,
-        checkpoint: Path = Path("pretrained/teachers/panns/Cnn14_16k_mAP=0.438.pth"),
+        checkpoint: Path | None = Path("pretrained/teachers/panns/Cnn14_16k_mAP=0.438.pth"),
         repo: Path = Path("external/teacher_repos/audioset_tagging_cnn"),
     ):
         require_torch()
@@ -174,7 +178,7 @@ class PannsCnn14Teacher(_ModuleBase):  # type: ignore[misc,valid-type]
         pytorch_dir = repo / "pytorch"
         if not pytorch_dir.is_dir():
             raise RuntimeError(f"PANNs source directory not found: {pytorch_dir}")
-        if not checkpoint.is_file():
+        if checkpoint is not None and not checkpoint.is_file():
             raise RuntimeError(f"PANNs checkpoint not found: {checkpoint}")
         sys.path.insert(0, str(pytorch_dir))
         try:
@@ -184,6 +188,7 @@ class PannsCnn14Teacher(_ModuleBase):  # type: ignore[misc,valid-type]
                 sys.path.remove(str(pytorch_dir))
             except ValueError:
                 pass
+        _patch_torchlibrosa_fast_dft()
         self.backbone = panns_models.Cnn14_16k(
             sample_rate=16000,
             window_size=512,
@@ -193,12 +198,13 @@ class PannsCnn14Teacher(_ModuleBase):  # type: ignore[misc,valid-type]
             fmax=8000,
             classes_num=527,
         )
-        checkpoint_payload = torch.load(checkpoint, map_location="cpu", weights_only=False)
-        self.backbone.load_state_dict(checkpoint_payload["model"], strict=True)
+        if checkpoint is not None:
+            checkpoint_payload = torch.load(checkpoint, map_location="cpu", weights_only=False)
+            self.backbone.load_state_dict(checkpoint_payload["model"], strict=True)
         for param in self.backbone.parameters():
             param.requires_grad = False
         self.classifier = nn.Linear(2048, num_classes)
-        self.checkpoint = str(checkpoint)
+        self.checkpoint = str(checkpoint) if checkpoint is not None else ""
         self.repo = str(repo)
 
     def train(self, mode: bool = True) -> Any:
@@ -219,6 +225,81 @@ class PannsCnn14Teacher(_ModuleBase):  # type: ignore[misc,valid-type]
             "embedding": F.normalize(embedding, dim=1),
             "attention": torch.empty((waveform.shape[0], 1), device=device),
         }
+
+
+def _patch_torchlibrosa_fast_dft() -> None:
+    """Avoid slow librosa/scipy paths in torchlibrosa STFT initialization."""
+
+    try:
+        from types import SimpleNamespace
+
+        import numpy as np
+        import torchlibrosa.stft as torchlibrosa_stft
+        from torchlibrosa.stft import STFT
+    except Exception:
+        return
+    if getattr(STFT, "_coughkd_fast_dft", False):
+        return
+
+    def _fast_dft_matrix(self: Any, n: int) -> Any:
+        grid = np.outer(np.arange(n), np.arange(n))
+        return np.exp((-2j * np.pi / n) * grid)
+
+    STFT.dft_matrix = _fast_dft_matrix  # type: ignore[method-assign]
+    def _fast_get_window(window: str, nx: int, fftbins: bool = True) -> Any:
+        if window == "hann" and fftbins:
+            return np.hanning(nx + 1)[:-1]
+        if window == "hann":
+            return np.hanning(nx)
+        raise ValueError(f"unsupported torchlibrosa window after CoughKD fast patch: {window}")
+
+    def _fast_pad_center(data: Any, *, size: int, axis: int = -1, **kwargs: Any) -> Any:
+        if axis == -1 and data.shape[-1] == size:
+            return data
+        pad_total = size - data.shape[axis]
+        if pad_total < 0:
+            raise ValueError("target size must be at least input size")
+        left = pad_total // 2
+        right = pad_total - left
+        pad_width = [(0, 0) for _ in range(data.ndim)]
+        pad_width[axis] = (left, right)
+        return np.pad(data, pad_width, mode=kwargs.get("mode", "constant"))
+
+    def _hz_to_mel(freq: Any) -> Any:
+        return 2595.0 * np.log10(1.0 + np.asarray(freq) / 700.0)
+
+    def _mel_to_hz(mel: Any) -> Any:
+        return 700.0 * (10.0 ** (np.asarray(mel) / 2595.0) - 1.0)
+
+    def _fast_mel(
+        *,
+        sr: int,
+        n_fft: int,
+        n_mels: int = 128,
+        fmin: float = 0.0,
+        fmax: float | None = None,
+        **_: Any,
+    ) -> Any:
+        fmax = float(fmax if fmax is not None else sr / 2)
+        mel_points = np.linspace(_hz_to_mel(fmin), _hz_to_mel(fmax), n_mels + 2)
+        hz_points = _mel_to_hz(mel_points)
+        bins = np.floor((n_fft + 1) * hz_points / sr).astype(int)
+        filters = np.zeros((n_mels, n_fft // 2 + 1), dtype=np.float32)
+        for idx in range(n_mels):
+            left, center, right = bins[idx], bins[idx + 1], bins[idx + 2]
+            center = max(center, left + 1)
+            right = max(right, center + 1)
+            for col in range(left, min(center, filters.shape[1])):
+                filters[idx, col] = (col - left) / max(1, center - left)
+            for col in range(center, min(right, filters.shape[1])):
+                filters[idx, col] = (right - col) / max(1, right - center)
+        return filters
+
+    torchlibrosa_stft.librosa = SimpleNamespace(
+        filters=SimpleNamespace(get_window=_fast_get_window, mel=_fast_mel),
+        util=SimpleNamespace(pad_center=_fast_pad_center),
+    )
+    STFT._coughkd_fast_dft = True  # type: ignore[attr-defined]
 
 
 class DepthwiseStudent(_ModuleBase):  # type: ignore[misc,valid-type]
@@ -268,6 +349,7 @@ def torch_kd_loss(
     config: KdLossConfig | None = None,
     class_weights: Any | None = None,
     feature_projector: Any | None = None,
+    kd_weights: Any | None = None,
 ) -> dict[str, Any]:
     config = config or KdLossConfig()
     ce = F.cross_entropy(
@@ -276,18 +358,21 @@ def torch_kd_loss(
         weight=class_weights,
         label_smoothing=config.label_smoothing,
     )
-    response = F.kl_div(
+    response_per_sample = F.kl_div(
         F.log_softmax(student_out["logits"] / config.temperature, dim=1),
         F.softmax(teacher_out["logits"] / config.temperature, dim=1),
-        reduction="batchmean",
-    ) * (config.temperature * config.temperature)
+        reduction="none",
+    ).sum(dim=1) * (config.temperature * config.temperature)
+    response = _weighted_mean(response_per_sample, kd_weights)
+    kd_scale = _weight_scale(kd_weights, student_out["logits"].device)
     student_features = student_out["features"]
     teacher_features = teacher_out["features"]
     if feature_projector is not None:
         student_features = feature_projector(student_features)
-    feature = F.mse_loss(_align_features(student_features, teacher_features), teacher_features)
-    embedding = _cosine_embedding_kd(student_out.get("embedding"), teacher_out.get("embedding"))
-    relation = _relation_kd(student_out.get("embedding"), teacher_out.get("embedding"))
+    feature_per_sample = F.mse_loss(_align_features(student_features, teacher_features), teacher_features, reduction="none").flatten(1).mean(dim=1)
+    feature = _weighted_mean(feature_per_sample, kd_weights)
+    embedding = _cosine_embedding_kd(student_out.get("embedding"), teacher_out.get("embedding"), kd_weights=kd_weights)
+    relation = _relation_kd(student_out.get("embedding"), teacher_out.get("embedding")) * kd_scale
     total = (
         ce
         + config.response_weight * response
@@ -428,11 +513,13 @@ def run_torch_training(
     teacher_kind: str = "compact",
     teacher_checkpoint: Path | None = None,
     teacher_repo: Path | None = None,
+    init_teacher_checkpoint: Path | None = None,
     kd_temperature: float = 2.0,
     kd_response_weight: float = 0.7,
     kd_feature_weight: float = 0.1,
     kd_embedding_weight: float = 0.0,
     kd_relation_weight: float = 0.0,
+    kd_sample_weights: Path | None = None,
     label_smoothing: float = 0.0,
 ) -> dict[str, object]:
     """Train teacher and KD student, then run test-set inference."""
@@ -450,6 +537,7 @@ def run_torch_training(
     index_to_label = {idx: label for label, idx in label_to_index.items()}
     config = RunConfig(experiment_name="torch_train", seed=seed)
     resolved_device = _resolve_device(device)
+    sample_weights = _load_sample_weights(kd_sample_weights)
     if torch.cuda.is_available():
         torch.backends.cudnn.benchmark = True
 
@@ -462,6 +550,7 @@ def run_torch_training(
             splits={split},
             max_records=max_records_per_split,
             max_duration_sec=max_duration_sec,
+            sample_weights=sample_weights if split == "train" else None,
         )
         for split in ("train", "val", "test")
     }
@@ -536,7 +625,10 @@ def run_torch_training(
         "teacher_kind": teacher_kind,
         "teacher_checkpoint": str(teacher_checkpoint) if teacher_checkpoint else "",
         "teacher_repo": str(teacher_repo) if teacher_repo else "",
+        "init_teacher_checkpoint": str(init_teacher_checkpoint) if init_teacher_checkpoint else "",
         "kd": asdict(kd_config),
+        "kd_sample_weights": str(kd_sample_weights) if kd_sample_weights else "",
+        "kd_sample_weight_summary": _sample_weight_summary(datasets["train"], sample_weights),
         "feature_projector": _projector_description(feature_projector),
         "label_to_index": label_to_index,
         "git_hash": git_hash(),
@@ -553,24 +645,40 @@ def run_torch_training(
     teacher_history: list[dict[str, object]] = []
     best_teacher_metric = -1.0
     best_teacher_path = checkpoints_dir / "teacher_best.pt"
-    for epoch in range(1, teacher_epochs + 1):
-        started = time.time()
-        train_loss = _train_teacher_epoch(
-            teacher,
-            loaders["train"],
-            teacher_optimizer,
-            resolved_device,
-            class_weights,
-            label_smoothing=label_smoothing,
-        )
+    if init_teacher_checkpoint is not None:
+        payload = torch.load(init_teacher_checkpoint, map_location=resolved_device, weights_only=False)
+        teacher.load_state_dict(payload["model_state_dict"], strict=True)
         val_result = _evaluate_model(teacher, loaders["val"], resolved_device, index_to_label)
-        metric = _selection_metric(val_result["metrics"])
-        entry = {"epoch": epoch, "train_loss": train_loss, "val": val_result["metrics"], "seconds": time.time() - started}
+        best_teacher_metric = _selection_metric(val_result["metrics"])
+        entry = {
+            "epoch": 0,
+            "train_loss": None,
+            "val": val_result["metrics"],
+            "seconds": 0.0,
+            "loaded_from": str(init_teacher_checkpoint),
+        }
         teacher_history.append(entry)
-        if metric > best_teacher_metric:
-            best_teacher_metric = metric
-            _save_checkpoint(best_teacher_path, teacher, label_to_index, run_config, entry)
-        _log_event(events_path, {"stage": "teacher", **entry})
+        _save_checkpoint(best_teacher_path, teacher, label_to_index, run_config, entry)
+        _log_event(events_path, {"stage": "teacher_loaded", **entry})
+    else:
+        for epoch in range(1, teacher_epochs + 1):
+            started = time.time()
+            train_loss = _train_teacher_epoch(
+                teacher,
+                loaders["train"],
+                teacher_optimizer,
+                resolved_device,
+                class_weights,
+                label_smoothing=label_smoothing,
+            )
+            val_result = _evaluate_model(teacher, loaders["val"], resolved_device, index_to_label)
+            metric = _selection_metric(val_result["metrics"])
+            entry = {"epoch": epoch, "train_loss": train_loss, "val": val_result["metrics"], "seconds": time.time() - started}
+            teacher_history.append(entry)
+            if metric > best_teacher_metric:
+                best_teacher_metric = metric
+                _save_checkpoint(best_teacher_path, teacher, label_to_index, run_config, entry)
+            _log_event(events_path, {"stage": "teacher", **entry})
 
     teacher.load_state_dict(torch.load(best_teacher_path, map_location=resolved_device, weights_only=False)["model_state_dict"])
     teacher_test = _evaluate_model(teacher, loaders["test"], resolved_device, index_to_label)
@@ -783,9 +891,12 @@ def _build_teacher(
     if teacher_kind == "compact":
         return ConvTeacher(num_classes=num_classes)
     if teacher_kind == "panns_cnn14_16k":
+        panns_checkpoint = checkpoint or Path("pretrained/teachers/panns/Cnn14_16k_mAP=0.438.pth")
+        if checkpoint is not None and checkpoint.name == "__skip_pretrained__":
+            panns_checkpoint = None
         return PannsCnn14Teacher(
             num_classes=num_classes,
-            checkpoint=checkpoint or Path("pretrained/teachers/panns/Cnn14_16k_mAP=0.438.pth"),
+            checkpoint=panns_checkpoint,
             repo=repo or Path("external/teacher_repos/audioset_tagging_cnn"),
         )
     raise ValueError(f"unsupported teacher_kind: {teacher_kind}")
@@ -812,6 +923,45 @@ def _class_weights(dataset: CoughManifestDataset, num_classes: int, device: Any)
     total = sum(counts)
     weights = [total / max(1, num_classes * count) for count in counts]
     return torch.tensor(weights, dtype=torch.float32, device=device)
+
+
+def _load_sample_weights(path: Path | None) -> dict[str, float]:
+    if path is None:
+        return {}
+    weights: dict[str, float] = {}
+    with path.open("r", encoding="utf-8", newline="") as handle:
+        reader = csv.DictReader(handle)
+        if "recording_id" not in (reader.fieldnames or []):
+            raise RuntimeError(f"sample weight file missing recording_id column: {path}")
+        if "kd_weight" not in (reader.fieldnames or []):
+            raise RuntimeError(f"sample weight file missing kd_weight column: {path}")
+        for row in reader:
+            rid = row.get("recording_id", "")
+            if not rid:
+                continue
+            try:
+                value = float(row.get("kd_weight", "1.0"))
+            except ValueError:
+                value = 1.0
+            weights[rid] = max(0.0, min(1.0, value))
+    return weights
+
+
+def _sample_weight_summary(dataset: CoughManifestDataset, weights: dict[str, float]) -> dict[str, object]:
+    values = [float(weights.get(row["recording_id"], 1.0)) for row in dataset.rows]
+    if not values:
+        return {"enabled": bool(weights), "num_rows": 0}
+    sorted_values = sorted(values)
+    return {
+        "enabled": bool(weights),
+        "num_rows": len(values),
+        "num_weighted_rows": sum(1 for row in dataset.rows if row["recording_id"] in weights),
+        "min": sorted_values[0],
+        "p10": sorted_values[max(0, int(0.10 * (len(sorted_values) - 1)))],
+        "mean": sum(values) / len(values),
+        "p90": sorted_values[max(0, int(0.90 * (len(sorted_values) - 1)))],
+        "max": sorted_values[-1],
+    }
 
 
 def _train_teacher_epoch(
@@ -867,6 +1017,7 @@ def _train_student_epoch(
             config=kd_config,
             class_weights=class_weights,
             feature_projector=feature_projector,
+            kd_weights=batch.get("kd_weight").to(device, non_blocking=True) if "kd_weight" in batch else None,
         )
         total = losses["total"]
         optimizer.zero_grad(set_to_none=True)
@@ -1222,14 +1373,29 @@ def _projector_description(projector: Any | None) -> dict[str, object]:
     }
 
 
-def _cosine_embedding_kd(student_embedding: Any | None, teacher_embedding: Any | None) -> Any:
+def _weighted_mean(values: Any, weights: Any | None) -> Any:
+    if weights is None:
+        return values.mean()
+    weights = weights.to(values.device, dtype=values.dtype).clamp(min=0.0)
+    denom = weights.sum().clamp(min=1e-8)
+    return (values * weights).sum() / denom
+
+
+def _weight_scale(weights: Any | None, device: Any | None = None) -> Any:
+    if weights is None:
+        return torch.ones((), dtype=torch.float32, device=device)
+    return weights.detach().float().mean().clamp(min=0.0)
+
+
+def _cosine_embedding_kd(student_embedding: Any | None, teacher_embedding: Any | None, kd_weights: Any | None = None) -> Any:
     if student_embedding is None or teacher_embedding is None:
         device = student_embedding.device if student_embedding is not None else (teacher_embedding.device if teacher_embedding is not None else torch.device("cpu"))
         return torch.zeros((), dtype=torch.float32, device=device)
     student_aligned = _align_features(student_embedding, teacher_embedding)
     student_norm = F.normalize(student_aligned, dim=1)
     teacher_norm = F.normalize(teacher_embedding, dim=1)
-    return 1.0 - F.cosine_similarity(student_norm, teacher_norm, dim=1).mean()
+    per_sample = 1.0 - F.cosine_similarity(student_norm, teacher_norm, dim=1)
+    return _weighted_mean(per_sample, kd_weights)
 
 
 def _relation_kd(student_embedding: Any | None, teacher_embedding: Any | None) -> Any:

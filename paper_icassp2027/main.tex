@@ -1,0 +1,166 @@
+\documentclass{article}
+\usepackage{spconf,amsmath,amssymb,graphicx,url}
+
+\newcommand{\toprule}{\hline}
+\newcommand{\midrule}{\hline}
+\newcommand{\bottomrule}{\hline}
+\newcommand{\method}{\textsc{CoughKD-ShiftAudit}}
+
+\graphicspath{{../runs/kd_failure_analysis/figures/}}
+\urlstyle{rm}
+\def\UrlFont{\rm}
+
+\title{CoughKD-ShiftAudit: Failure Cartography for Ultra-Light Cough Audio Distillation under Dataset Shift}
+\name{Anonymous Authors}
+\address{Anonymous Institution}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+Large audio teachers are attractive for cough and respiratory modeling, but edge deployment requires compact students. Knowledge distillation (KD) is a natural compression tool, yet its reliability under cough dataset shift remains under-audited. We present \method, a bounded deployment audit for ultra-light cough audio distillation. Using Coswara as source data and COUGHVID plus Tos COVID-19 as independent public external targets, we evaluate common KD variants and deployment selectors. Standard and shortcut-aware KD variants yield weak or negative external gains, and a target-unlabeled guard fails on Tos. We then test a moderate-label semantic-constrained router that permits symptom/acquisition slice gates but sends demographic-only metadata to calibration stacking. It improves row-level mean external AUROC by $+3.75$ and $+3.99$ points over 1000 target resamples; a subject-grouped Tos audit gives a conservative $+2.94$ point gain while inverted controls collapse. The evidence supports a narrow claim: target metadata semantics can act as a safety prior for transfer routing under cough dataset shift.
+\end{abstract}
+
+\begin{keywords}
+knowledge distillation, cough audio, dataset shift, model compression, external validation
+\end{keywords}
+
+\section{Introduction}
+Cough audio was widely studied during the COVID era because public datasets such as Coswara and COUGHVID made large-scale remote screening experiments feasible \cite{bhattacharya2023coswara,orlandic2021coughvid}. However, clinical claims from cough audio are fragile: labels may be noisy, recruitment channels and devices may leak shortcuts, and symptoms or demographics can confound apparent accuracy \cite{han2022sounds,coppock2024nmi,zimmer2026coughacoustic}. We therefore do not claim that cough sounds diagnose COVID-19. Instead, we ask a narrower deployment question: when a large audio teacher is distilled into an ultra-light student, does KD remain reliable under external dataset shift?
+
+This question matters because large audio models such as PANNs, AST, and BEATs can provide useful representations \cite{kong2020panns,gong2021ast,chen2023beats}, while edge use favors models that are tiny, fast, and private-by-default. Distillation can bridge these goals, but it can also compress teacher biases, label noise, or dataset-specific shortcuts into a student that appears deployment-ready. Prior work covers COVID cough datasets and cross-dataset classifiers \cite{saravanan2026dndt}, symptom-assisted, metadata-aided, and audio-language respiratory modeling \cite{lin2025sympcoughnet,yang2026deviceinvariant,kim2024bts,wang2026acula,siam2026respiramfm,vincent2026coughsense}, cough representation learning \cite{luong2025coughvit}, respiratory foundation models \cite{opera2024}, respiratory KD \cite{toikkanen2025respiratorykd}, metadata-gated speech adaptation \cite{mehralian2026gloria}, KD under distribution shift \cite{shiftkd2025}, negative-transfer mitigation \cite{zhang2022negativetransfer}, and semantic descriptors for domain adaptation \cite{yang2015unified}. Our contribution is a bounded audit protocol, not a new SOTA cough classifier or a first KD method, plus multi-evidence external stress results and a semantic-router finding: metadata field type can rescue transfer routing when unlabeled guards and generic slice selection fail.
+
+\section{CoughKD-ShiftAudit}
+\method{} audits a fixed teacher--student setting rather than searching over architectures. The source model is trained on Coswara cough-heavy and cough-shallow recordings. The teacher is a PANNs CNN14 16 kHz model with a cough-task head; the student is a depthwise CNN with 20.7K parameters, about $3912\times$ fewer than the 81M-parameter teacher. We compare CE-only training, vanilla response KD, target-consistency distillation (TCD), and three robust-KD variants.
+
+The audit has four evidence layers. First, external performance is reported on COUGHVID and Tos COVID-19 2021 official test, using macro one-vs-rest AUROC, COVID AUROC, and macro AUPRC. Second, reliability is measured with calibration and representation probes: ECE, domain-probe AUC, and task-probe AUC. Third, deployment evidence reports checkpoint size; the student checkpoints are around 0.10 MB. Fourth, method-selection stress tests ask whether target-unlabeled guard signals select a useful KD variant and whether rankings change across targets or evaluation units. Overlap audits are run before each external target is used.
+
+The loss variants are intentionally conventional so that failures are interpretable. Vanilla KD uses teacher response matching. TCD uses target augmentations and prediction consistency to exploit unlabeled target audio. Shortcut-suppressed KD weights the KD term, not the CE term, using source-domain shortcut risk estimated by probes. Disagreement-gated KD reduces KD pressure when teacher, label, student, or augmentation predictions conflict. Probe-adversarial training penalizes domain-readable student representations while retaining task supervision. These variants cover common intuitions behind ``robust KD'' without turning the study into an unbounded teacher--student--loss search.
+
+For a source clip $x_s$ with label $y_s$ and an unlabeled target clip $x_t$, the audited objectives are instances of
+\begin{equation}
+\begin{aligned}
+\mathcal{L} ={}&
+\mathcal{L}_{\mathrm{CE}}(x_s,y_s)
++ \lambda_k w_k(x_s)\mathcal{L}_{\mathrm{KD}}(x_s) \\
+&+ \lambda_t w_t(x_t)\mathcal{L}_{\mathrm{TCD}}(x_t)
++ \lambda_p\mathcal{L}_{\mathrm{probe}},
+\end{aligned}
+\label{eq:audit_loss}
+\end{equation}
+where $w_k$ and $w_t$ encode shortcut risk, confidence, or disagreement gates depending on the candidate. Equation~\ref{eq:audit_loss} is used as an audit template: the paper tests whether these plausible robustness controls improve external transfer, rather than claiming that any one term is novel by itself.
+
+\section{Guarded Selection}
+A deployment setting rarely has target labels. We therefore audit a simple target-unlabeled guard that ranks trained variants using target confidence, entropy, predicted label balance, and source-relative prediction shift. This guard is not presented as a new algorithmic contribution; it is a falsifiable test of whether unlabeled target statistics can safely choose among KD variants. A useful guard should select a method with positive external delta, while not worsening calibration or probe evidence. This requirement is deliberately stricter than post-hoc target-label selection.
+
+Concretely, each method $m$ receives a guard score
+\begin{equation}
+G(m)=
+g\left(\overline{c}_m, \overline{H}_m,
+\left|\hat{\pi}_m-\pi_s\right|, \Delta_s(m)\right),
+\label{eq:guard}
+\end{equation}
+where $\overline{c}_m$ and $\overline{H}_m$ are target confidence and entropy, $\hat{\pi}_m$ is the target predicted-label distribution, $\pi_s$ is the source prediction prior, and $\Delta_s(m)$ is the source-side change relative to baseline. The guard is evaluated only by whether its selected model works on hidden external labels.
+
+\section{Semantic-Constrained Transfer Routing}
+The failed unlabeled guard motivates a bounded, moderate-label alternative. Given a small labeled target calibration split, we allow two deployment strategies: target-calibrated logistic stacking over existing model probabilities, and metadata slice gating that switches from source-only inference to a candidate method within target slices. The key constraint is semantic: target metadata fields are not interchangeable routing variables. We define a conservative safe set $\mathcal{C}_{safe}$ containing symptom or acquisition fields, and treat demographic-only fields as unsafe for slice gating. For target $T$ with configured slice field $c_T$, the router deploys
+\begin{equation}
+R(T)=
+\begin{cases}
+\mathrm{slice\_gate}, & c_T \in \mathcal{C}_{safe},\\
+\mathrm{logistic\_stack}, & c_T \notin \mathcal{C}_{safe}.
+\end{cases}
+\label{eq:semantic_router}
+\end{equation}
+In our current targets, COUGHVID uses the respiratory-symptom field \texttt{symptom\_resp} and therefore permits slice gating; Tos uses \texttt{age}, which is demographic and therefore routes to stacking. This is not a label-free method, a general claim that metadata helps, metadata-to-text or audio-language respiratory modeling \cite{kim2024bts,wang2026acula,siam2026respiramfm}, metadata-gated representation adaptation \cite{mehralian2026gloria}, or semantic descriptor learning for unseen domains \cite{yang2015unified,kumagai2018zeroshot}. The narrower claim is that metadata field semantics constrain which deployment strategy is safe. We test it with inverted, all-slice, and no-slice semantic controls.
+
+\section{Experimental Setup}
+Coswara is the source dataset. COUGHVID is the largest external target in this audit. Tos COVID-19 is a second independent public target with mobile-phone OGG cough clips and RT-PCR positive/negative labels \cite{buenosaires2021toscovid}. We use the 2021 official test split, yielding 991 clips after audio availability filtering. Virufy original and segmented clips are used only as small stress targets because their effective independent subject count is 16. For COUGHVID and Tos, results are averaged across seeds 7, 11, and 23. All new targets pass configured Coswara overlap checks.
+
+We evaluate four questions: (i) does KD improve external AUROC over source-only or CE baselines, (ii) do calibration or probe improvements imply better external ranking, (iii) can target-unlabeled guard signals select a reliable KD strategy without target labels, and (iv) under moderate target calibration, does semantic-constrained routing outperform generic target-slice or stacking choices? Semantic-router results use repeated outer calibration/evaluation splits and report mean confidence intervals separately from split-tail risk. Because Tos has repeated subjects, we additionally run a subject-grouped semantic-router audit and treat it as the conservative boundary for Tos.
+
+We treat labels and evaluation units conservatively. Clip-level metrics are reported for COUGHVID and Tos because those are the directly evaluated manifests. For Virufy segmented audio, we additionally aggregate probabilities by subject to test whether segment-level conclusions survive subject-level evaluation. We do not report Virufy as an independent validation cohort because its subject count is too small; it is a stress target for evaluation-unit sensitivity. Similarly, we do not interpret Tos or COUGHVID results as clinical utility evidence, because the audit does not control symptoms, recruitment mechanism, or device confounding.
+
+\begin{table}[t]
+\centering
+\scriptsize
+\caption{Datasets and roles after manifest construction. Pos. counts are COVID-positive clips. Virufy is stress-only because the independent subject count is small.}
+\label{tab:datasets}
+\resizebox{\linewidth}{!}{%
+\begin{tabular}{lrrrl}
+\toprule
+Dataset & Clips & Subjects & Pos. & Role \\
+\midrule
+Coswara & 5,491 & 2,746 & 1,362 & source train/test \\
+COUGHVID & 7,310 & 7,310 & 547 & main external \\
+Tos COVID-19 & 991 & 495 & 663 & independent external \\
+Virufy & 16 & 16 & 7 & stress target \\
+Virufy-seg & 121 & 16 & 48 & unit-sensitivity stress \\
+\bottomrule
+\end{tabular}
+}
+\end{table}
+
+\begin{table}[t]
+\centering
+\scriptsize
+\caption{Deployment scale of the audited teacher--student pair. Latency is measured on a synthetic 4s feature with batch size 1.}
+\label{tab:efficiency}
+\begin{tabular}{lrr}
+\toprule
+Quantity & Teacher & Student \\
+\midrule
+Parameters & 81,043,476 & 20,717 \\
+Compression & -- & $3911.9\times$ \\
+Checkpoint size & 309.26 MB & 0.103 MB \\
+CPU latency & -- & 1.13 ms \\
+CUDA latency & -- & 0.50 ms \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\section{Results}
+Table~\ref{tab:coughvid_external_audit} shows the main COUGHVID audit. The best aggregate method, confidence-gated TCD, improves external macro AUROC by only $+0.0007$ over source-only continuation. Vanilla KD improves COVID AUROC but decreases macro AUROC. Shortcut-suppressed and disagreement-gated variants reduce some calibration or probe indicators, but do not improve external macro AUROC. Thus, standard and shortcut-aware KD variants do not support a robust method-superiority claim.
+
+\input{../runs/kd_failure_analysis/paper_ready_tables/paper_ready_tables.tex}
+
+Table~\ref{tab:target_unit_stress} shows why a single target or single metric is insufficient. On Tos COVID-19, CE-only is the post-hoc best method, vanilla KD is negative, and the guard-selected method is also negative. Virufy variants further change rankings across clip and subject aggregation. These stress tests support the central audit finding: KD behavior is target-sensitive and evaluation-unit-sensitive.
+
+Table~\ref{tab:semantic_router_controls} shows that semantic-constrained routing turns this failure map into a narrow positive mechanism. The intended rule improves row-level mean AUROC by $+3.75$ points on COUGHVID and $+3.99$ points on Tos; inverted semantics collapse both targets. Paired bootstrap over matched target resamples gives semantic-vs-inverted gains of $+3.20$ points on COUGHVID (95\% CI $[+3.06,+3.34]$) and $+2.92$ points on Tos (95\% CI $[+2.72,+3.12]$), with no bootstrap mean below zero. A subject-grouped resampling audit keeps COUGHVID unchanged and gives a more conservative Tos gain of $+2.94$ points, still above inverted and all-slice controls. All-slice and no-slice controls fail where predicted: age-slice transfer is unsafe for Tos, and disabling the symptom slice removes the COUGHVID gain. Table~\ref{tab:semantic_router_budget} shows this is moderate-label rather than few-shot: 30\% target calibration remains useful, 20\% is positive but riskier, and 10\% fails on COUGHVID.
+
+\input{../runs/semantic_router_paper_tables/semantic_router_tables.tex}
+
+\begin{figure}[t]
+    \centering
+    \includegraphics[width=0.48\linewidth]{external_macro_vs_ece.pdf}
+    \includegraphics[width=0.48\linewidth]{external_macro_vs_domain_probe.pdf}
+    \caption{Metric disagreement on COUGHVID. Lower ECE or lower domain readability does not reliably imply higher external macro AUROC, so single-proxy robustness claims are risky.}
+    \label{fig:metric_disagreement}
+\end{figure}
+
+\begin{figure}[t]
+    \centering
+    \includegraphics[width=\linewidth]{shift_audit_protocol.pdf}
+    \caption{\method{} protocol. A fixed ultra-light student is audited with external metrics, calibration, probes, overlap checks, target/unit stress tests, and deployment evidence.}
+    \label{fig:protocol}
+\end{figure}
+
+\section{Discussion}
+\method{} supports an audit claim, not a diagnostic claim. The audit yields three deployment lessons. First, compression evidence is necessary but not sufficient: the student is genuinely small and fast (Table~\ref{tab:efficiency}), yet common KD/TCD variants give weak, unstable, or negative external gains across COUGHVID and Tos. Second, proxy reliability evidence can disagree with task transfer. A compact cough model may look better under calibration, domain readability, or a single external AUROC while still failing to transfer consistently.
+
+Third, target-unlabeled model selection is fragile. On COUGHVID, the guard selects the same tiny-gain TCD variant as the post-hoc best method. On Tos, however, the guard selects a negative-transfer variant while CE-only is post-hoc best. On Virufy variants, guard behavior changes again. Thus, target confidence and entropy statistics are risk signals rather than deployment selectors, and are insufficient evidence for deployable KD robustness without external validation. The semantic router gives a more constructive lesson: when target labels are available for moderate calibration, the metadata field type itself is a safety prior. Symptom or acquisition slices can support slice gates, but demographic-only slices should not be treated as equivalent adaptation units.
+
+The semantic-router claim has three important guardrails. It is not a guarantee against negative transfer: split-tail failures remain, so deployment should still monitor target slices. It is also not intended as a hand-coded shortcut for two datasets; the evidence comes from inverted, all-slice, no-slice, paired-bootstrap controls, and a paired comparison against a nested target-calibrated controller ($+0.71$/$+1.90$ points), but a third large target is needed to test generality. Finally, the current evidence is moderate-label rather than few-shot: 30\% target calibration remains useful, while 10\% fails on COUGHVID.
+
+The main limitation is empirical scope. COUGHVID and Tos provide two independent public external targets, but larger cohorts such as UK COVID-19 Vocal Audio and Cambridge COVID-19 Sounds would strengthen the audit and test whether the semantic router generalizes beyond two metadata schemas. The teacher is also fixed to PANNs CNN14 in the current paper. This is a deliberate control: the claim concerns failure modes under a fixed ultra-light deployment pipeline, not the best possible audio foundation teacher.
+
+Threats to validity are also part of the claim boundary. The audit does not adjust for symptoms, demographics, recording devices, or recruitment channel. Public datasets differ in label source and quality filtering, and Tos contains multiple cough clips for some participants. We therefore report a subject-grouped Tos resampling audit in the supplement and use it as the conservative multi-record-target boundary. Positive or negative AUROC deltas are interpreted as evidence about distillation reliability under public-dataset shift, not about disease biology or clinical utility.
+
+\section{Conclusion}
+
+The current results caution against reporting only aggregate AUROC when compressing cough audio models for edge deployment. They also show a narrow rescue path: moderate-label transfer routing should respect target metadata semantics rather than treating all slices as equally safe. Stronger empirical scope would come from larger external cohorts such as UK COVID-19 Vocal Audio or Cambridge COVID-19 Sounds, and from broader non-COVID cough transfer tasks such as tuberculosis screening \cite{kafentzis2026tb}.
+
+\bibliographystyle{IEEEbib}
+\bibliography{../paper/references}
+
+\end{document}

@@ -1,25 +1,21 @@
 \documentclass[letterpaper,10pt]{article}
 
-\usepackage{times}
-\usepackage{helvet}
-\usepackage{courier}
 \usepackage[hyphens]{url}
 \usepackage{graphicx}
 \usepackage{amsmath}
 \usepackage{amssymb}
-\usepackage{booktabs}
-\usepackage{multirow}
-\usepackage{tabularx}
-\usepackage{xcolor}
-\usepackage[margin=0.75in]{geometry}
+\newcommand{\toprule}{\hline}
+\newcommand{\midrule}{\hline}
+\newcommand{\bottomrule}{\hline}
 
+\graphicspath{{../runs/kd_failure_analysis/figures/}}
 \urlstyle{rm}
 \def\UrlFont{\rm}
 \frenchspacing
 \setlength{\pdfpagewidth}{8.5in}
 \setlength{\pdfpageheight}{11in}
 
-\title{\textbf{CoughKD: Distilling Audio Foundation Models into Compact Cough Screening Networks}}
+\title{\textbf{CoughKD-ShiftAudit: Failure Cartography for Ultra-Light Cough Audio Distillation under Dataset Shift}}
 \author{Anonymous Authors\\Anonymous Institution}
 \date{}
 
@@ -27,7 +23,7 @@
 \maketitle
 
 \begin{abstract}
-Audio-based respiratory screening has become a promising low-cost pathway for monitoring cough-related diseases, yet the strongest audio foundation models remain too expensive for continuous mobile or edge deployment. We present \textsc{CoughKD}, a teacher--student framework that transfers disease-discriminative and robustness-preserving knowledge from pretrained audio foundation models to compact cough screening networks. A BEATs/AST/PANNs teacher is fine-tuned on cough and respiratory audio with subject-disjoint training splits, while MobileNetV3, EfficientNet, BC-ResNet, and ECAPA-style students are optimized using response-, feature-, attention-, and relation-level distillation. To reduce the common overclaiming risk in cough-based diagnosis, we evaluate models under in-domain, cross-dataset, calibration, subgroup, and efficiency protocols. The proposed study targets a deployable model that preserves at least 95\% of teacher AUROC while reducing parameters by more than 10$\times$ and CPU latency by more than 5$\times$. This manuscript is a research protocol and paper draft: all numerical results marked as targets must be replaced with controlled experimental measurements before submission.
+Large audio models can provide useful representations for cough and respiratory sounds, but deploying them on edge devices requires compact students. Knowledge distillation (KD) is a natural compression tool, yet its reliability under cough dataset shift remains unclear. We introduce \textsc{CoughKD-ShiftAudit}, a deployment-oriented audit protocol for ultra-light cough audio distillation. Using Coswara as the source dataset and COUGHVID plus Tos COVID-19 as independent public external targets, we evaluate CE-only training, vanilla KD, target-consistency distillation, shortcut-suppressed KD, disagreement-gated KD, and probe-adversarial training across multiple seeds. Beyond aggregate AUROC, we report calibration, task and domain probes, high-specificity sensitivity, model size, latency, metadata-defined target slices, bootstrap target-subset stability, overlap control, and clip-vs-subject stress tests. Current evidence shows that the best aggregate KD variant improves COUGHVID external macro AUROC by only $+0.0007$ over source-only continuation; on Tos COVID-19, CE-only training is the post-hoc best method and vanilla KD is negative. Small Virufy stress targets further change method rankings across preprocessing and evaluation units. These findings suggest that cough audio distillation under dataset shift requires failure-oriented auditing before deployment, and that shortcut or calibration improvements alone should not be interpreted as external robustness.
 \end{abstract}
 
 \input{sections/01_introduction}

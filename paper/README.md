@@ -1,24 +1,20 @@
-# CoughKD Paper Draft
+# CoughKD-ShiftAudit Paper Draft
 
 This directory contains a top-conference-style manuscript scaffold for:
 
-> CoughKD: Distilling Audio Foundation Models into Compact Cough Screening Networks
+> CoughKD-ShiftAudit: Failure Cartography for Ultra-Light Cough Audio Distillation under Dataset Shift
 
-The current draft is intentionally conservative: target results are marked as targets, and empirical claims are tracked in `notes/claim_ledger.md`.
+The current draft is intentionally conservative. It is no longer written as a method-superiority paper. The supported story is a deployment reliability audit: KD gains are weak or unstable under cough dataset shift, and aggregate AUROC, calibration, probes, target slices, and clip-vs-subject evaluation can disagree.
 
 ## Files
 
 - `main.tex`: compilable LaTeX manuscript scaffold.
 - `sections/`: paper sections.
-- `tables/`: planned result and ablation tables.
-- `tables/coswara_split_summary.tex`: measured filtered Coswara split summary.
-- `tables/coswara_engineering_results.tex`: measured compact teacher/student engineering baseline.
+- `../runs/kd_failure_analysis/paper_ready_tables/paper_ready_tables.tex`: current paper-ready result tables.
+- `../runs/kd_failure_analysis/figures/`: current paper-ready audit figures.
 - `references.bib`: core bibliography for the first draft.
-- `notes/experimental_protocol.md`: implementation-facing experiment protocol.
-- `notes/review_log.md`: research-direction review notes.
-- `notes/claim_ledger.md`: claim safety ledger.
-- `../docs/long_training_plan.md`: long-duration GPU training readiness gate.
-- `../docs/clickup_long_training.md`: ClickUp-style task list for pre-long-training work.
+- `../docs/paper_draft_shift_audit.md`: prose draft and claim ledger.
+- `../docs/progress/5.47_2026_literature_recheck_and_claim_boundary.md`: novelty boundary.
 
 ## Compile
 
@@ -37,10 +33,10 @@ Or from the repository root, run the full validation flow:
 scripts/validate_project.sh
 ```
 
-For a real AAAI submission, replace the current standard article wrapper in `main.tex` with the official AAAI template after downloading the current author kit, then re-check page limits and formatting.
+For a real ICASSP submission, replace the current standard article wrapper in `main.tex` with the official ICASSP 2027 author kit after it is released, then re-check page limits and formatting.
 
 ## Writing Rule
 
 Do not convert any target number into a result unless it is backed by a saved experiment log, exact split definition, and reproducible evaluation script.
 
-Measured results now include the compact Coswara engineering baseline from `runs/coswara_torch_closed_loop_full/` and the first PANNs CNN14 16 kHz foundation-teacher long run from `runs/long_coswara_panns_cnn14_16k_seed7_e30/`. These are valid evidence that the pipeline runs end to end with both compact and one pretrained-teacher path, but they are still single-seed in-domain results rather than final clinical or cross-dataset claims.
+Measured results now include multi-seed COUGHVID external audit runs, Virufy tiny stress targets, subject-level Virufy segmented aggregation, calibration/efficiency summaries, and overlap-control reports. These support an audit-protocol claim, not a clinical diagnosis claim or a robust new-KD-method claim.

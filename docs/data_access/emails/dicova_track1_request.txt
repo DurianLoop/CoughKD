@@ -1,0 +1,23 @@
+﻿Subject: Academic access request for DiCOVA Track-1 cough audio protocol
+
+Dear DiCOVA organizers,
+
+I am a student researcher working on robust and lightweight cough audio model deployment. I would like to request academic access to the DiCOVA 2021 Track-1 cough audio dataset and protocol if it is still available for research use.
+
+Our project does not aim to claim clinical COVID diagnosis from cough audio. We study whether ultra-light cough audio models and knowledge distillation methods remain reliable under dataset/protocol shift. DiCOVA would be used as an auxiliary challenge-style protocol with explicit overlap control against Coswara-derived training data.
+
+Requested materials:
+- Track-1 cough audio files;
+- labels and fold/split metadata;
+- recording IDs or subject IDs needed for overlap auditing;
+- usage terms and citation requirements.
+
+We will not redistribute the data.
+
+Institution: [Your institution]
+Applicant: [Your name]
+Supervisor: [Supervisor]
+Preferred email: [Your email]
+
+Best regards,
+[Your name]

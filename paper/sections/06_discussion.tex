@@ -1,13 +1,13 @@
-\section{Discussion and Review Notes}
+\section{Discussion}
 
-\paragraph{Why distillation is the right main story.}
-Patient voiceprint recognition from cough is scientifically interesting but depends heavily on identity labels and data-use permissions. In contrast, teacher-to-student compression can be evaluated on existing cough datasets with standard classification protocols. It creates a cleaner top-conference story: strong teacher, compact deployable student, rigorous generalization and efficiency evidence.
+\paragraph{What can be claimed.}
+The current evidence supports \textsc{CoughKD-ShiftAudit} as a deployment-oriented audit protocol. Across COUGHVID and Tos COVID-19, ultra-light cough KD under dataset shift is method-sensitive and target-composition-sensitive; across Virufy stress targets, it is also evaluation-unit-sensitive. The strongest claim is not that a new KD loss wins, but that cough KD requires multi-evidence failure auditing before deployment.
 
-\paragraph{Main threat to validity.}
-The biggest risk is dataset confounding. COVID labels may correlate with microphone type, geography, recording date, language, or symptom-reporting behavior. Distillation can transfer these shortcuts from teacher to student. The paper must therefore emphasize external validation, subgroup reporting, and calibration rather than only leaderboard-style accuracy.
+\paragraph{What cannot be claimed.}
+The current evidence does not support clinical COVID cough diagnosis utility, robust SOTA performance, or a new KD method that consistently beats baselines. It also does not establish that Virufy is a strong external validation cohort, because its effective independent sample size is small.
 
-\paragraph{Expected reviewer concerns.}
-Reviewers will likely ask whether the method is more than combining known KD losses. The response must be empirical and domain-specific: cough audio has label noise, segment uncertainty, and long-recording aggregation; the contribution is the validated distillation recipe under realistic respiratory-audio constraints. If full KD does not beat simpler KD, the paper should pivot to a careful negative result or a narrower claim.
+\paragraph{Why the negative result matters.}
+Negative or weak KD gains are not a failure of the project if the audit is rigorous. They reveal that improvements in calibration, shortcut suppression, or target consistency can disagree with external ranking. This is precisely the kind of evidence needed before edge deployment claims are made.
 
-\paragraph{Clinical caution.}
-The system should be described as a screening research model, not a diagnostic device. Any medical claim requires prospective clinical validation and regulatory review.
+\paragraph{Next evidence needed.}
+For a stronger empirical scope, the next evidence should come from larger targets such as UK COVID-19 Vocal Audio or Cambridge COVID-19 Sounds / ComParE CCS. If DiCOVA is added, it must be reported as a Coswara-related auxiliary protocol unless overlap control proves otherwise. A non-COVID cough transfer target could broaden the claim to generic cough deployment reliability.

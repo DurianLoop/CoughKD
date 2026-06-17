@@ -367,11 +367,13 @@ def cmd_torch_train(args: argparse.Namespace) -> int:
             teacher_kind=args.teacher_kind,
             teacher_checkpoint=Path(args.teacher_checkpoint) if args.teacher_checkpoint else None,
             teacher_repo=Path(args.teacher_repo) if args.teacher_repo else None,
+            init_teacher_checkpoint=Path(args.init_teacher_checkpoint) if args.init_teacher_checkpoint else None,
             kd_temperature=args.kd_temperature,
             kd_response_weight=args.kd_response_weight,
             kd_feature_weight=args.kd_feature_weight,
             kd_embedding_weight=args.kd_embedding_weight,
             kd_relation_weight=args.kd_relation_weight,
+            kd_sample_weights=Path(args.kd_sample_weights) if args.kd_sample_weights else None,
             label_smoothing=args.label_smoothing,
         )
     except RuntimeError as exc:
@@ -562,11 +564,13 @@ def build_parser() -> argparse.ArgumentParser:
     torch_train.add_argument("--teacher-kind", default="compact", choices=["compact", "panns_cnn14_16k"])
     torch_train.add_argument("--teacher-checkpoint")
     torch_train.add_argument("--teacher-repo")
+    torch_train.add_argument("--init-teacher-checkpoint")
     torch_train.add_argument("--kd-temperature", type=float, default=2.0)
     torch_train.add_argument("--kd-response-weight", type=float, default=0.7)
     torch_train.add_argument("--kd-feature-weight", type=float, default=0.1)
     torch_train.add_argument("--kd-embedding-weight", type=float, default=0.0)
     torch_train.add_argument("--kd-relation-weight", type=float, default=0.0)
+    torch_train.add_argument("--kd-sample-weights")
     torch_train.add_argument("--label-smoothing", type=float, default=0.0)
     torch_train.set_defaults(func=cmd_torch_train)
 

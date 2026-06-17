@@ -5,6 +5,8 @@ __pycache__/
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
+.numba_cache/
+.tmp_pycache/
 
 # Experiment outputs and large generated artifacts
 runs/
@@ -12,6 +14,7 @@ outputs/
 checkpoints/
 pretrained/
 external/
+manifests/*.csv
 *.ckpt
 *.pth
 *.pt
@@ -32,3 +35,15 @@ paper/*.fls
 paper/*.log
 paper/*.out
 paper/*.synctex.gz
+paper/main.pdf
+paper_icassp2027/*.aux
+paper_icassp2027/*.bbl
+paper_icassp2027/*.blg
+paper_icassp2027/*.fdb_latexmk
+paper_icassp2027/*.fls
+paper_icassp2027/*.log
+paper_icassp2027/*.out
+paper_icassp2027/*.synctex.gz
+paper_icassp2027/main.pdf
+paper_icassp2027/main_pdftotext.txt
+paper_icassp2027/qa_pages/

@@ -1,0 +1,29 @@
+﻿Subject: Academic access request for COVID-19 Sounds / cough recordings
+
+Dear COVID-19 Sounds team,
+
+I am a student researcher working on robust and lightweight respiratory audio model deployment. I would like to request academic access to the COVID-19 Sounds dataset, especially the cough recordings and metadata/split information relevant to the ComParE COVID-19 Cough Sub-Challenge if available.
+
+Our project does not aim to claim clinical diagnostic utility from cough audio. Instead, we study a deployment reliability question: whether knowledge distillation from large audio models to ultra-light cough audio students remains reliable under external dataset shift. We currently use Coswara as a source dataset and COUGHVID as one external target, and we would like to add COVID-19 Sounds as an independent external target for failure-mode auditing, calibration analysis, and model-size/latency-aware evaluation.
+
+Planned use:
+- non-commercial academic research;
+- external validation of compact cough audio models;
+- analysis of dataset shift, calibration, negative transfer, and deployment reliability;
+- no redistribution of the audio data.
+
+Requested data:
+- cough audio files;
+- COVID status labels and available metadata;
+- official split information if available;
+- data usage terms and Data Transfer Agreement instructions.
+
+Institution: [Your institution]
+Research group / supervisor: [Supervisor]
+Applicant: [Your name]
+Google account or preferred sharing email: [Your email]
+
+Please let me know the required DTA process and whether any institutional signature is needed.
+
+Best regards,
+[Your name]

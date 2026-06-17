@@ -1,78 +1,47 @@
-\section{Method}
+\section{CoughKD-ShiftAudit}
 \label{sec:method}
 
-\subsection{Problem Definition}
+\subsection{Problem Setup}
 
-Let $x_i$ denote an audio recording and $y_i \in \{1,\ldots,C\}$ denote the respiratory condition label. The training set is split by subject whenever subject identifiers are available. A long recording is converted into cough candidate segments $\{s_{ij}\}_{j=1}^{n_i}$, and the recording-level prediction is obtained by aggregating segment-level probabilities.
+Let $\mathcal{D}_s=\{(x_i,y_i,u_i)\}$ be a source cough dataset with recording $x_i$, label $y_i$, and subject identifier $u_i$. Let $\mathcal{D}_t$ be a target dataset used only for external evaluation and stress testing. The goal is not to maximize a single in-domain score, but to audit whether a compact student $f_s$ distilled from a high-capacity teacher $f_t$ remains reliable under $\mathcal{D}_s \rightarrow \mathcal{D}_t$ shift.
 
-The goal is to learn a compact student $f_s$ that approximates a high-capacity teacher $f_t$ while minimizing deployment cost:
-\begin{equation}
-\max_{f_s} \quad \mathrm{AUROC}_{external}(f_s) - \lambda \log(\mathrm{Latency}(f_s)) - \mu \log(\mathrm{Params}(f_s)).
-\end{equation}
+We treat the source split as subject-disjoint. Target labels are used for evaluation only, not for target-supervised model selection. When a target contains multiple clips from one subject or original recording, we report both clip-level and subject-level views when possible.
 
-\subsection{Audio Preprocessing}
+\subsection{Teacher and Student}
 
-All audio is converted to mono 16 kHz waveform. We remove obviously invalid recordings using duration, clipping, energy, and cough-confidence filters. For long audio, a cough detector produces candidate segments with 50\% overlap and hysteresis merging. Each segment is converted to a log-mel spectrogram using the same frontend for teacher and student unless the backbone requires a different resolution.
+The current teacher is PANNs CNN14 at 16 kHz, initialized from AudioSet-pretrained weights and adapted to the source label space \cite{kong2020panns}. The student is a compact depthwise CNN with 20.7K parameters. This gives an extreme compression ratio of about 3912x relative to the 81M-parameter teacher. The teacher/student pair is intentionally simple: the paper audits whether even standard KD assumptions are reliable before expanding to a larger teacher-by-student grid.
 
-\subsection{Teacher Fine-Tuning}
+\subsection{Audited Training Variants}
 
-The default teacher is BEATs-base, with AST-base and PANNs CNN14 as independent teacher baselines. Teacher training optimizes cross-entropy with class-balanced sampling:
-\begin{equation}
-\mathcal{L}_{teacher} = \mathcal{L}_{CE}(y, p_t) + \gamma \mathcal{L}_{calib},
-\end{equation}
-where $\mathcal{L}_{calib}$ is an optional differentiable calibration regularizer. Teacher selection is based on validation AUROC and expected calibration error, not accuracy alone.
-
-\subsection{Student Networks}
-
-We evaluate four deployment families:
-
+We compare a bounded set of training variants:
 \begin{itemize}
-    \item \textbf{MobileNetV3}: mobile spectrogram classifier.
-    \item \textbf{EfficientNet-B0/B2}: compact but stronger spectrogram classifier.
-    \item \textbf{BC-ResNet}: ultra-light audio CNN.
-    \item \textbf{ECAPA-small}: temporal embedding model with attentive pooling.
+    \item CE-only student training;
+    \item vanilla response KD;
+    \item source-only continuation;
+    \item target-consistency KD;
+    \item confidence-gated target-consistency KD;
+    \item shortcut-suppressed KD;
+    \item disagreement-gated KD;
+    \item probe-adversarial KD.
 \end{itemize}
 
-All students use the same training and evaluation splits. Parameter count, FLOPs, CPU latency, and exported model size are measured with fixed input duration.
+These variants are not presented as a new SOTA architecture search. They form an audit set for common KD assumptions: that teacher probabilities help, that target consistency helps, that shortcut suppression helps, and that domain readability reduction helps.
 
-\subsection{Multi-Level Distillation}
+\subsection{Audit Evidence}
 
-The student objective is:
-\begin{align}
-\mathcal{L}_{student}
-&= \mathcal{L}_{CE}(y, p_s)
-+ \alpha T^2 \mathrm{KL}(\sigma(z_t/T) \| \sigma(z_s/T)) \nonumber \\
-&+ \beta \| h_t - P(h_s) \|_2^2
-+ \delta \mathcal{L}_{emb}
-+ \eta \mathcal{L}_{rel}.
-\end{align}
+\textsc{CoughKD-ShiftAudit} reports:
+\begin{itemize}
+    \item external macro AUROC, COVID AUROC, and macro AUPRC;
+    \item ECE, Brier score, and sensitivity at 95\% specificity;
+    \item domain probe AUC and task probe AUC over student representations;
+    \item parameter count, checkpoint size, and latency;
+    \item metadata-defined COUGHVID slices;
+    \item bootstrap target-subset stability;
+    \item target-unlabeled guard stress tests;
+    \item clip-vs-subject aggregation on segmented targets;
+    \item source-target overlap control for external and auxiliary manifests.
+\end{itemize}
 
-Here $z_t,z_s$ are teacher and student logits, $T$ is temperature, $h_t,h_s$ are intermediate features, and $P$ is a learned projection layer used when teacher and student feature dimensions differ. The embedding term aligns normalized teacher and student embeddings:
-\begin{equation}
-\mathcal{L}_{emb} =
-1 -
-\frac{1}{B}
-\sum_{i=1}^{B}
-\cos \left(
-\frac{P_e(e_{s,i})}{\|P_e(e_{s,i})\|_2},
-\frac{e_{t,i}}{\|e_{t,i}\|_2}
-\right),
-\end{equation}
-where $P_e$ denotes the same feature-alignment operator when dimensions differ. The relation term preserves pairwise similarity within each mini-batch:
-\begin{equation}
-\mathcal{L}_{rel} =
-\left\|
-\mathrm{cos}(E_t, E_t) -
-\mathrm{cos}(P_e(E_s), P_e(E_s))
-\right\|_F^2.
-\end{equation}
+\subsection{Overlap Control}
 
-The current executable PyTorch path exposes $T$, $\alpha$, $\beta$, $\delta$, $\eta$, and label smoothing as training arguments and records every loss component in the run event log. Attention-transfer distillation remains an ablation target for teacher backbones that expose compatible time-frequency attention maps.
-
-\subsection{Record-Level Aggregation}
-
-For recording-level classification, segment probabilities are aggregated using quality-weighted top-$k$ pooling:
-\begin{equation}
-\hat{p}_i = \frac{\sum_{j \in \mathrm{TopK}(q_{ij})} q_{ij} p_{ij}}{\sum_{j \in \mathrm{TopK}(q_{ij})} q_{ij}},
-\end{equation}
-where $q_{ij}$ is the segment quality score. This limits the influence of non-cough or corrupted segments in long recordings.
+External validation claims are invalid if the target overlaps with the source. Before reporting any new external or auxiliary target, we run a manifest overlap audit against Coswara. The audit checks exact recording IDs, subject IDs, paths, path stems, path tails, shared identifier-like tokens, and optionally SHA-256 audio hashes. DiCOVA is treated as a Coswara-related auxiliary protocol unless overlap is explicitly controlled.
